@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <rect width="800" height="500" fill="#e9f1ee"/>
+  <circle cx="400" cy="230" r="120" fill="#c9dfd4"/>
+  <path d="M340 250h120M365 290h70M380 330h40" stroke="#245b4b" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="365" cy="205" r="14" fill="#245b4b"/>
+  <circle cx="435" cy="205" r="14" fill="#245b4b"/>
+  <text x="400" y="430" fill="#245b4b" font-family="Arial, sans-serif" font-size="28" text-anchor="middle">Devil Maker Idea</text>
+</svg>

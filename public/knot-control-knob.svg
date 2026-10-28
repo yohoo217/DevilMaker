@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">Knot Corolla control knob prototype</title>
+  <desc id="desc">A simple technical illustration of a smooth circular control knob with a rear D shaped latch.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#f7f3f1"/><stop offset="1" stop-color="#e8d7d4"/></linearGradient>
+    <linearGradient id="knob" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#8d2048"/><stop offset="1" stop-color="#4c102b"/></linearGradient>
+  </defs>
+  <rect width="1200" height="700" fill="url(#bg)"/>
+  <text x="70" y="90" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#333">KNOT</text>
+  <text x="70" y="140" font-family="Arial, sans-serif" font-size="24" fill="#555">2017 Corolla · right TUNE / SCROLL knob</text>
+  <ellipse cx="620" cy="430" rx="270" ry="74" fill="#3b0b22" opacity=".18"/>
+  <path d="M350 330 C350 210 470 145 620 145s270 65 270 185v105c0 120-120 185-270 185s-270-65-270-185Z" fill="url(#knob)" stroke="#3b0b22" stroke-width="10"/>
+  <ellipse cx="620" cy="330" rx="270" ry="185" fill="#9e2a50" stroke="#3b0b22" stroke-width="10"/>
+  <ellipse cx="620" cy="330" rx="205" ry="132" fill="#7c1b40" opacity=".72"/>
+  <path d="M610 465v105h55v-105" fill="#d6a33b" stroke="#6b4a16" stroke-width="8"/>
+  <path d="M582 570h110" stroke="#6b4a16" stroke-width="12"/>
+  <circle cx="620" cy="330" r="34" fill="#e7c46b" stroke="#6b4a16" stroke-width="8"/>
+  <text x="925" y="285" font-family="Arial, sans-serif" font-size="24" fill="#333">smooth cap</text>
+  <path d="M900 295h-90" stroke="#333" stroke-width="3"/>
+  <text x="925" y="430" font-family="Arial, sans-serif" font-size="24" fill="#333">D shaft fit test</text>
+  <path d="M900 440h-160" stroke="#333" stroke-width="3"/>
+  <text x="70" y="620" font-family="Arial, sans-serif" font-size="22" fill="#555">Parametric OpenSCAD prototype · measure before final print</text>
+</svg>

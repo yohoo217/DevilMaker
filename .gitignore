@@ -1,0 +1,13 @@
+node_modules/
+.nuxt/
+.output/
+output/
+.playwright-cli/
+data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
+data/uploads/
+.env
+.env.*
+.DS_Store
+*.log

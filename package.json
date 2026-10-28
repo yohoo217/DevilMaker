@@ -1,0 +1,20 @@
+{
+  "name": "devil-maker",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "test": "node --test tests/api.test.mjs"
+  },
+  "dependencies": {
+    "nuxt": "^3.14.1592",
+    "three": "^0.186.1",
+    "vue": "latest",
+    "vue-router": "latest"
+  }
+}
