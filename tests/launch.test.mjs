@@ -75,6 +75,20 @@ test('launch workflow covers roles, moderation, uploads, and restart persistence
     const unauthorizedAdmin = await fetch(`${baseUrl}/api/admin/posts`)
     assert.equal(unauthorizedAdmin.status, 401)
 
+    const invalidImageForm = new FormData()
+    invalidImageForm.set('file', new File(['not an image'], 'launch-test.txt', { type: 'text/plain' }))
+    assert.equal((await fetch(`${baseUrl}/api/uploads/image`, { method: 'POST', body: invalidImageForm })).status, 400)
+
+    const invalidModelForm = new FormData()
+    invalidModelForm.set('file', new File(['not an stl'], 'launch-test.txt', { type: 'text/plain' }))
+    assert.equal((await fetch(`${baseUrl}/api/uploads/stl`, { method: 'POST', body: invalidModelForm })).status, 400)
+
+    const invalidPost = await json('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ nickname: 'Launch Tester', title: 'Invalid upload path', category: 'Idea', content: 'This should fail.', imageUrl: 'javascript:alert(1)' })
+    })
+    assert.equal(invalidPost.response.status, 400)
+
     const imageBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
     const imageForm = new FormData()
     imageForm.set('file', new File([imageBytes], 'launch-test.png', { type: 'image/png' }))
