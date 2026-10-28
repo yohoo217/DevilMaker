@@ -10,6 +10,11 @@ interface EditablePost {
   modelFileName: string
   modelFileSize: number
   status: string
+  rejectionReason: string
+  reviewedAt: string | null
+  latestRevisionStatus: string | null
+  latestRevisionRejectionReason: string | null
+  latestRevisionReviewedAt: string | null
 }
 
 const route = useRoute()
@@ -19,6 +24,7 @@ const form = reactive({ nickname: '', title: '', category: 'Idea', content: '', 
 const submitting = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
+const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : ''
 
 watchEffect(() => {
   if (!post.value) return
@@ -64,6 +70,26 @@ const submitEdit = async () => {
       <form class="form-card" @submit.prevent="submitEdit">
         <div v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</div>
         <div v-if="successMessage" class="form-success" role="status">{{ successMessage }}</div>
+        <div v-if="post.status === 'pending'" class="status-panel status-pending" role="status">
+          <strong>Status: Pending review</strong>
+          <span>Your post is waiting for admin approval.</span>
+        </div>
+        <div v-if="post.status === 'rejected'" class="status-panel status-rejected" role="alert">
+          <strong>Status: Rejected</strong>
+          <span v-if="post.rejectionReason">Admin note: {{ post.rejectionReason }}</span>
+          <span v-else>This post was not approved. You can update it and submit it again.</span>
+          <small v-if="post.reviewedAt">Reviewed {{ formatDate(post.reviewedAt) }}</small>
+        </div>
+        <div v-if="post.latestRevisionStatus === 'pending'" class="status-panel status-pending" role="status">
+          <strong>Latest edit: Pending review</strong>
+          <span>The current public version remains visible until approval.</span>
+        </div>
+        <div v-if="post.latestRevisionStatus === 'rejected'" class="status-panel status-rejected" role="alert">
+          <strong>Latest edit: Rejected</strong>
+          <span v-if="post.latestRevisionRejectionReason">Admin note: {{ post.latestRevisionRejectionReason }}</span>
+          <span v-else>You can update the post and submit a new edit for review.</span>
+          <small v-if="post.latestRevisionReviewedAt">Reviewed {{ formatDate(post.latestRevisionReviewedAt) }}</small>
+        </div>
         <label class="field-label" for="edit-nickname">Nickname</label>
         <input id="edit-nickname" v-model.trim="form.nickname" class="text-input" maxlength="40" required>
         <label class="field-label" for="edit-title">Title</label>

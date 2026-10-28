@@ -137,6 +137,11 @@ h2 { margin-bottom: 8px; }
 .textarea { resize: vertical; min-height: 130px; line-height: 1.5; }
 .form-error { margin-bottom: 18px; padding: 12px 14px; border-radius: 8px; background: #fff1f1; font-size: 14px; }
 .form-success { margin-bottom: 18px; padding: 12px 14px; border: 1px solid #357c61; border-radius: 8px; color: #b8e4cf; background: #193b30; font-size: 14px; }
+.status-panel { display: flex; flex-direction: column; gap: 4px; margin-bottom: 18px; padding: 13px 14px; border-radius: 8px; font-size: 13px; }
+.status-panel strong { font-size: 14px; }
+.status-panel small { margin-top: 2px; opacity: .75; }
+.status-pending { border: 1px solid #80652d; color: #f0d798; background: #3a301b; }
+.status-rejected { border: 1px solid #8b4545; color: #f1c0c0; background: #3b2020; }
 .role-status { display: flex; align-items: center; gap: 9px; margin-bottom: 18px; padding: 12px 14px; border: 1px solid #357c61; border-radius: 8px; color: #b8e4cf; background: #193b30; font-size: 13px; }
 .role-status strong { color: #e4f6ed; }
 .status-dot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: #6ed3a5; box-shadow: 0 0 0 4px rgba(110, 211, 165, .12); }

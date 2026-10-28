@@ -19,13 +19,13 @@ export default defineEventHandler(async event => {
     throw createError({ statusCode: 400, statusMessage: 'STL file size is invalid.' })
   }
   const db = getDatabase()
-  const post = db.prepare('SELECT id, status FROM posts WHERE id = ? AND editTokenHash = ? AND status IN (\'pending\', \'approved\')').get(id, hashEditToken(token)) as { id: number; status: string } | undefined
+  const post = db.prepare('SELECT id, status FROM posts WHERE id = ? AND editTokenHash = ? AND status IN (\'pending\', \'approved\', \'rejected\')').get(id, hashEditToken(token)) as { id: number; status: string } | undefined
   if (!post) throw createError({ statusCode: 404, statusMessage: 'This edit link is invalid or expired.' })
 
-  if (post.status === 'pending') {
-    db.prepare('UPDATE posts SET nickname = ?, title = ?, category = ?, content = ?, imageUrl = ?, modelUrl = ?, modelFileName = ?, modelFileSize = ? WHERE id = ?').run(nickname, title, category, content, imageUrl, modelUrl, modelFileName, modelFileSize, id)
+  if (post.status === 'pending' || post.status === 'rejected') {
+    db.prepare("UPDATE posts SET nickname = ?, title = ?, category = ?, content = ?, imageUrl = ?, modelUrl = ?, modelFileName = ?, modelFileSize = ?, status = 'pending', reviewedAt = NULL, rejectionReason = '' WHERE id = ?").run(nickname, title, category, content, imageUrl, modelUrl, modelFileName, modelFileSize, id)
   } else {
     db.prepare('INSERT INTO post_revisions (postId, nickname, title, category, content, imageUrl, modelUrl, modelFileName, modelFileSize) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, nickname, title, category, content, imageUrl, modelUrl, modelFileName, modelFileSize)
   }
-  return { ok: true, status: post.status === 'pending' ? 'pending' : 'revision_pending' }
+  return { ok: true, status: post.status === 'approved' ? 'revision_pending' : 'pending' }
 })
