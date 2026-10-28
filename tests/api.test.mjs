@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
 test('SQLite schema supports posts, comments, and cascade deletion', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'makerhub-forum-'))
+  const directory = await mkdtemp(join(tmpdir(), 'devil-maker-'))
   const db = new DatabaseSync(join(directory, 'test.sqlite'))
   db.exec('PRAGMA foreign_keys = ON')
   db.exec(`
