@@ -102,7 +102,7 @@ const moderate = async (post: PendingPost, action: 'approve' | 'reject') => {
     <div v-if="message" class="form-success" role="status">{{ message }}</div>
     <div v-if="adminVerified" class="role-status" role="status">
       <span class="status-dot"></span>
-      <span><strong>Admin role verified.</strong> You are reviewing {{ posts.length + revisions.length }} pending item{{ posts.length + revisions.length === 1 ? '' : 's' }}.</span>
+      <span><strong>Admin access verified.</strong> You are reviewing {{ posts.length + revisions.length }} pending item{{ posts.length + revisions.length === 1 ? '' : 's' }}.</span>
     </div>
     <div v-if="!loading && adminKey && !errorMessage && !posts.length && !revisions.length" class="state-card">No posts or edits are waiting for approval.</div>
 

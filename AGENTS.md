@@ -10,17 +10,16 @@ This is a small discussion forum for maker ideas. Keep the first version easy to
 
 Use the PTT information structure as inspiration: boards, post lists, post detail pages, and replies. Use a modern interface instead of copying PTT branding or exact visual details.
 
-Do not add complex authentication, payments, fundraising, private messages, or marketplace workflows unless the product plan explicitly changes. The current role plan is intentionally small: Visitor, Contributor, and Admin.
+Do not add authentication, payments, fundraising, private messages, marketplace workflows, or a general role system unless the product plan explicitly changes. The current access plan is intentionally small: Public user and Admin.
 
-## Role plan
+## Access plan
 
-| Role | Initial responsibility |
+| Access level | Initial responsibility |
 | --- | --- |
-| Visitor | Browse approved posts and read replies |
-| Contributor | Use a nickname to publish posts, upload files, reply, and edit their own posts |
+| Public user | Browse approved posts, use a nickname to publish and reply, upload files, and use a private edit link |
 | Admin | Approve or reject new posts and post edits during the early launch period |
 
-Do not build full account registration or a general permission system yet. Visitors and contributors may remain anonymous in the first version. The current contributor identity is a nickname plus a private edit token, and the local admin page continues to use `ADMIN_KEY`. Add a separate Moderator role only if community growth creates a clear need.
+Do not build account registration or separate public user roles yet. Public users remain anonymous in the first version. The public user identity is a nickname plus a private edit token, and the admin page continues to use `ADMIN_KEY`.
 
 ## Visual rules
 

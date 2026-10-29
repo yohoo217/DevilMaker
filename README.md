@@ -6,17 +6,16 @@ Posts are held for admin approval during the early launch period. Use `/admin` t
 
 After creating a post, save the private edit link shown on the confirmation message. Every edit creates a pending revision for admin review.
 
-## Role plan
+## Access plan
 
-The first release keeps roles simple:
+The first release keeps access simple:
 
-| Role | Access |
+| Access level | Access |
 | --- | --- |
-| Visitor | Browse approved posts and read replies |
-| Contributor | Publish with a nickname, upload files, reply, and edit their own posts |
+| Public user | Browse approved posts, publish with a nickname, upload files, reply, and use a private edit link |
 | Admin | Approve or reject posts and post edits |
 
-There is no account registration or full authentication system yet. Contributors remain anonymous, and the local admin page uses `ADMIN_KEY`. A separate Moderator role can be added later if community growth requires it.
+There is no account registration or public user role system yet. Public users remain anonymous, and the admin page uses `ADMIN_KEY`.
 
 ## Run locally
 

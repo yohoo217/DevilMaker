@@ -176,7 +176,7 @@ const submitPost = async () => {
   <section class="form-page">
     <NuxtLink to="/board" class="back-link">← Back to Creative Board</NuxtLink>
     <div class="form-heading">
-      <p class="eyebrow">CONTRIBUTOR MODE · START A DISCUSSION</p>
+      <p class="eyebrow">START A DISCUSSION</p>
       <h1>Share a new idea</h1>
       <p class="page-description">No account is needed. Use a nickname so people know who they are talking with.</p>
     </div>

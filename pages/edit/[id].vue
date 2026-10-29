@@ -62,7 +62,7 @@ const submitEdit = async () => {
     <div v-else-if="error || !post" class="state-card state-error">This edit link is invalid or expired.</div>
     <template v-else>
       <div class="form-heading">
-        <p class="eyebrow">CONTRIBUTOR MODE · EDIT POST</p>
+        <p class="eyebrow">EDIT POST</p>
         <h1>Update your post</h1>
         <p class="page-description">Your changes will be reviewed by an admin before they become public.</p>
       </div>
