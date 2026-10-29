@@ -6,14 +6,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const projectRoot = join(import.meta.dirname, '..')
-const port = 3200 + (process.pid % 500)
-const baseUrl = `http://127.0.0.1:${port}`
+let baseUrl = ''
 
-const waitForServer = async () => {
+const waitForServer = async serverUrl => {
   const deadline = Date.now() + 45_000
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${baseUrl}/api/posts`)
+      const response = await fetch(`${serverUrl}/api/posts`)
       if (response.ok) return
     } catch {}
     await new Promise(resolve => setTimeout(resolve, 500))
@@ -22,29 +21,40 @@ const waitForServer = async () => {
 }
 
 const startServer = async databasePath => {
-  const server = spawn(process.execPath, ['node_modules/nuxt/bin/nuxt.mjs', 'dev', '--port', String(port)], {
+  const server = spawn(process.execPath, ['node_modules/nuxt/bin/nuxt.mjs', 'dev', '--host', '127.0.0.1', '--port', '0'], {
     cwd: projectRoot,
     env: { ...process.env, DATABASE_PATH: databasePath, ADMIN_KEY: 'launch-test-admin', NUXT_IGNORE_LOCK: '1' },
-    stdio: ['ignore', 'pipe', 'pipe']
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true
   })
   let output = ''
-  server.stdout.on('data', chunk => { output += chunk.toString() })
-  server.stderr.on('data', chunk => { output += chunk.toString() })
+  const captureOutput = chunk => { output += chunk.toString() }
+  server.stdout.on('data', captureOutput)
+  server.stderr.on('data', captureOutput)
   try {
-    await waitForServer()
+    const addressDeadline = Date.now() + 45_000
+    let serverUrl = ''
+    while (Date.now() < addressDeadline && !serverUrl) {
+      const match = output.match(/http:\/\/(?:localhost|127\.0\.0\.1):(\d+)/)
+      if (match) serverUrl = `http://127.0.0.1:${match[1]}`
+      else await new Promise(resolve => setTimeout(resolve, 250))
+    }
+    if (!serverUrl) throw new Error('Nuxt test server did not report a port.')
+    baseUrl = serverUrl
+    await waitForServer(serverUrl)
     return server
   } catch (error) {
-    server.kill('SIGTERM')
+    try { process.kill(-server.pid, 'SIGTERM') } catch { server.kill('SIGTERM') }
     throw new Error(`${error.message}\n${output}`)
   }
 }
 
 const stopServer = async server => {
   if (!server || server.exitCode !== null) return
-  server.kill('SIGTERM')
+  try { process.kill(-server.pid, 'SIGTERM') } catch { server.kill('SIGTERM') }
   await new Promise(resolve => {
     const timer = setTimeout(() => {
-      server.kill('SIGKILL')
+      try { process.kill(-server.pid, 'SIGKILL') } catch { server.kill('SIGKILL') }
       resolve()
     }, 5_000)
     server.once('exit', () => {
