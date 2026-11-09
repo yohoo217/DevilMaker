@@ -52,6 +52,9 @@ const setupModelViewer = async () => {
     geometry.translate(-center.x, -center.y, -center.z)
     const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: '#d8a33c', roughness: .68, metalness: .08 }))
     mesh.scale.setScalar(2.5 / largestDimension)
+    // Start at a gentle angle so simple models (such as a calibration cube)
+    // read as 3D immediately rather than as a flat, solid-colour face.
+    mesh.rotation.set(0.35, 0.55, 0)
     scene.add(mesh)
     controls.target.set(0, 0, 0)
     controls.update()
