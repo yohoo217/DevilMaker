@@ -47,8 +47,10 @@ const setupModelViewer = async () => {
     const center = geometry.boundingBox?.getCenter(new THREE.Vector3()) || new THREE.Vector3()
     const size = geometry.boundingBox?.getSize(new THREE.Vector3()) || new THREE.Vector3(1, 1, 1)
     const largestDimension = Math.max(size.x, size.y, size.z) || 1
+    // Center the geometry itself before scaling. Moving the mesh by the unscaled
+    // bounding-box center would place small STL files outside the camera view.
+    geometry.translate(-center.x, -center.y, -center.z)
     const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: '#d8a33c', roughness: .68, metalness: .08 }))
-    mesh.position.sub(center)
     mesh.scale.setScalar(2.5 / largestDimension)
     scene.add(mesh)
     controls.target.set(0, 0, 0)
