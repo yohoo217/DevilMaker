@@ -10,21 +10,24 @@ const seedPosts = [
     title: 'How can I improve this desk accessory?',
     category: 'Idea',
     content: 'I want to create a small 3D printed desk accessory that keeps one charging cable in place. What would make this useful for your workspace?',
-    imageUrl: ''
+    imageUrl: '', modelUrl: '', modelFileName: '', modelFileSize: 0
   },
   {
     nickname: 'Jordan',
     title: 'Looking for a simple design to print',
     category: 'Help',
     content: 'I am learning basic CAD and would like to start with a practical project. What is a good first object to design and test?',
-    imageUrl: ''
+    imageUrl: '', modelUrl: '', modelFileName: '', modelFileSize: 0
   },
   {
     nickname: 'Maya',
     title: 'Knot: 2017 Corolla control parts',
     category: 'Project',
-    content: 'Knot is a measurement driven 3D printing project for a 2017 Toyota Corolla right TUNE / SCROLL control knob and a protective shell for the existing four button key fob. The first goal is a safe fit test, not a factory replacement. The workflow is simple: measure with calipers, print a small fit test, check the fit without force or slip, then revise the model. The knob and shell are non safety critical parts only. Never use this project for steering, braking, airbags, ignition, security components, or any other safety critical control.',
-    imageUrl: '/knot-control-knob.svg'
+    content: 'Knot is a measurement-driven 3D-printing project for a 2017 Toyota Corolla right TUNE / SCROLL control knob and a protective shell for the existing four-button key fob. This is a non-safety-critical, personal fit-test project — not a factory replacement.\n\nSTART HERE\n1. Download the included 20 mm calibration cube STL and print it with your normal material and profile.\n2. Measure the printed cube on each axis with calipers. Record any X/Y/Z error before modeling a part that needs to fit.\n3. Measure the original knob or fob shell: outside diameter, height, shaft opening, keying flats, and clearance to nearby trim. Photograph the part beside a ruler so later revisions are traceable.\n4. Make a small, thin fit-test ring or shell section first. Test without force; it should seat securely but release without cracking the original part.\n\nPRINT BASELINE\n• PLA or PETG, 0.20 mm layer height, 3 perimeters, 20–30% infill.\n• Print one orientation at a time and write the orientation on the test piece.\n• For a first snap/press fit, start conservatively with about 0.20–0.30 mm total clearance, then adjust from the measured result. Your printer and material determine the final value.\n\nWHAT TO SHARE IN A REVISION\nInclude the caliper measurements, printer/material, layer height, fit result (loose / good / tight), and the exact dimension you changed. That makes the next version reproducible.\n\nSAFETY NOTE\nDo not use this project for steering, braking, airbags, ignition, security components, or any other safety-critical vehicle control. The included STL is only a 20 mm print-calibration cube; it is not a vehicle component.',
+    imageUrl: '/knot-control-knob.svg',
+    modelUrl: '/models/knot-fit-test-cube-20mm.stl',
+    modelFileName: 'knot-fit-test-cube-20mm.stl',
+    modelFileSize: 1778
   }
 ]
 
@@ -97,13 +100,20 @@ export function getDatabase(path = useRuntimeConfig().databasePath) {
   database.exec("UPDATE posts SET status = 'approved' WHERE status = '' OR status IS NULL")
 
   const insertIfMissing = database.prepare(`
-    INSERT INTO posts (nickname, title, category, content, imageUrl, status)
-    SELECT ?, ?, ?, ?, ?, 'approved'
+    INSERT INTO posts (nickname, title, category, content, imageUrl, modelUrl, modelFileName, modelFileSize, status)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'approved'
     WHERE NOT EXISTS (SELECT 1 FROM posts WHERE title = ?)
+  `)
+  const refreshKnotSample = database.prepare(`
+    UPDATE posts
+    SET content = ?, imageUrl = ?, modelUrl = ?, modelFileName = ?, modelFileSize = ?
+    WHERE title = ? AND nickname = ? AND modelUrl = ''
   `)
   database.exec('BEGIN')
   try {
-    seedPosts.forEach(post => insertIfMissing.run(post.nickname, post.title, post.category, post.content, post.imageUrl, post.title))
+    seedPosts.forEach(post => insertIfMissing.run(post.nickname, post.title, post.category, post.content, post.imageUrl, post.modelUrl, post.modelFileName, post.modelFileSize, post.title))
+    const knot = seedPosts.find(post => post.title === 'Knot: 2017 Corolla control parts')!
+    refreshKnotSample.run(knot.content, knot.imageUrl, knot.modelUrl, knot.modelFileName, knot.modelFileSize, knot.title, knot.nickname)
     database.exec('COMMIT')
   } catch (error) {
     database.exec('ROLLBACK')
