@@ -51,7 +51,9 @@ const setupModelViewer = async () => {
     // bounding-box center would place small STL files outside the camera view.
     geometry.translate(-center.x, -center.y, -center.z)
     const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: '#d8a33c', roughness: .68, metalness: .08 }))
-    mesh.scale.setScalar(2.5 / largestDimension)
+    // Leave breathing room inside the preview frame, including when the model
+    // is rotated, so the whole shape is visible on first load.
+    mesh.scale.setScalar(1.4 / largestDimension)
     // Start at a gentle angle so simple models (such as a calibration cube)
     // read as 3D immediately rather than as a flat, solid-colour face.
     mesh.rotation.set(0.35, 0.55, 0)
