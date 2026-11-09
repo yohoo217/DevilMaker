@@ -1,5 +1,5 @@
 import { requireAdmin } from '~/server/utils/admin'
-import { getDatabase } from '~/server/utils/database'
+import { getDatabase, recordProjectVersion } from '~/server/utils/database'
 import { cleanText } from '~/server/utils/validation'
 
 export default defineEventHandler(async event => {
@@ -16,6 +16,7 @@ export default defineEventHandler(async event => {
     try {
       db.prepare('UPDATE posts SET nickname = ?, title = ?, category = ?, content = ?, imageUrl = ?, modelUrl = ?, modelFileName = ?, modelFileSize = ? WHERE id = ?').run(revision.nickname, revision.title, revision.category, revision.content, revision.imageUrl, revision.modelUrl, revision.modelFileName, revision.modelFileSize, revision.postId)
       db.prepare("UPDATE post_revisions SET status = 'approved', reviewedAt = CURRENT_TIMESTAMP WHERE id = ?").run(id)
+      recordProjectVersion(db, { ...revision, id: revision.postId }, revision.versionNote || 'Approved project update.')
       db.prepare("UPDATE post_revisions SET status = 'rejected', reviewedAt = CURRENT_TIMESTAMP, rejectionReason = 'Superseded by an approved revision.' WHERE postId = ? AND id != ? AND status = 'pending'").run(revision.postId, id)
       db.exec('COMMIT')
     } catch (error) {

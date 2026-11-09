@@ -9,6 +9,16 @@ export function cleanText(value: unknown, field: string, maxLength: number) {
   return text
 }
 
+const allowedCategories = new Set(['Idea', 'Help', 'Project', 'Inspiration'])
+
+export function cleanCategory(value: unknown) {
+  const category = cleanText(value, 'Category', 30)
+  if (!allowedCategories.has(category)) {
+    throw createError({ statusCode: 400, statusMessage: 'Please choose a valid category.' })
+  }
+  return category
+}
+
 export function optionalUrl(value: unknown) {
   if (value === undefined || value === null || value === '') return ''
   if (typeof value !== 'string' || value.length > 2000) {

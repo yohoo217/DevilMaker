@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getDatabase } from '~/server/utils/database'
+import { getUploadDirectory } from '~/server/utils/uploads'
 
 const contentTypes: Record<string, string> = {
   jpg: 'image/jpeg',
@@ -19,7 +20,7 @@ export default defineEventHandler(async event => {
   const post = getDatabase().prepare("SELECT id FROM posts WHERE imageUrl = ? AND status = 'approved'").get(imageUrl)
   if (!post) throw createError({ statusCode: 404, statusMessage: 'Image not found.' })
 
-  const filePath = join(process.cwd(), 'data', 'uploads', 'images', filename)
+  const filePath = join(getUploadDirectory('images'), filename)
   try {
     const fileStats = await stat(filePath)
     const extension = filename.split('.').pop()?.toLowerCase() || 'jpg'

@@ -9,6 +9,7 @@ const uploading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 const editLink = ref('')
+const editLinkCopied = ref(false)
 const modelFile = ref<File | null>(null)
 const imageFile = ref<File | null>(null)
 const imagePreviewUrl = ref('')
@@ -143,10 +144,21 @@ const uploadImageFile = async () => {
   form.imageUrl = uploaded.url
 }
 
+const copyEditLink = async () => {
+  if (!editLink.value) return
+  try {
+    await navigator.clipboard.writeText(new URL(editLink.value, window.location.origin).toString())
+    editLinkCopied.value = true
+  } catch {
+    errorMessage.value = 'Copy the private edit link manually and store it somewhere safe.'
+  }
+}
+
 const submitPost = async () => {
   errorMessage.value = ''
   successMessage.value = ''
   editLink.value = ''
+  editLinkCopied.value = false
   submitting.value = true
   try {
     await uploadImageFile()
@@ -187,7 +199,10 @@ const submitPost = async () => {
       <div v-if="editLink" class="edit-link-card">
         <strong>Save your private edit link</strong>
         <p>{{ editLink }}</p>
-        <NuxtLink :to="editLink" class="button button-secondary">Open Edit Page</NuxtLink>
+        <div class="edit-link-actions">
+          <NuxtLink :to="editLink" class="button button-secondary">Open Edit Page</NuxtLink>
+          <button class="button button-outline" type="button" @click="copyEditLink">{{ editLinkCopied ? 'Copied' : 'Copy Link' }}</button>
+        </div>
       </div>
       <label class="field-label" for="nickname">Nickname</label>
       <input id="nickname" v-model.trim="form.nickname" class="text-input" maxlength="40" required placeholder="Your nickname">

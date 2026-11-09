@@ -2,7 +2,7 @@
 
 A small English discussion board for sharing maker ideas. The first version uses Nuxt, SQLite, anonymous nicknames, image URLs, and optional STL model previews. It requires Node 22.5 or newer because it uses the built in `node:sqlite` module.
 
-Posts are held for admin approval during the early launch period. Use `/admin` to review pending posts. Uploaded STL files and images are stored privately until their post is approved. For local development, the admin key defaults to `devil-maker-demo-admin`; set `ADMIN_KEY` to use a different key.
+Posts are held for admin approval during the early launch period. Use `/admin` to review pending posts. The admin review screen can preview pending uploaded images and download pending STL files; both stay private until approval. For local development, the admin key defaults to `devil-maker-demo-admin`; set `ADMIN_KEY` to use a different key.
 
 After creating a post, save the private edit link shown on the confirmation message. Every edit creates a pending revision for admin review.
 
@@ -28,6 +28,19 @@ Open `http://localhost:3000/board`.
 
 The SQLite database is created at `data/forum.sqlite` on first start. Set `DATABASE_PATH` to use another location.
 
+## Deploy on Railway
+
+Railway needs one persistent Volume because this app keeps both SQLite data and user uploads locally. In the Railway service settings, create a Volume mounted at `/data`, then set these variables:
+
+```bash
+DATABASE_PATH=/data/forum.sqlite
+UPLOAD_PATH=/data/uploads
+ADMIN_KEY=<a long, unique secret>
+NODE_ENV=production
+```
+
+Railway uses `railway.toml` to build with `npm run build` and start with `npm run start`. Run a single app instance: SQLite and local uploads are intentionally not designed for horizontally scaled instances.
+
 ## API
 
 `GET /api/posts`
@@ -45,6 +58,8 @@ The SQLite database is created at `data/forum.sqlite` on first start. Set `DATAB
 `GET /api/admin/revisions`
 
 `PATCH /api/admin/revisions/:id`
+
+All text and categories are validated on the server. Replies may only be added to approved posts. Uploads accept JPG, PNG, WebP, and STL files within the limits shown on the submission form, and verify the file signature before storage.
 
 ## Test
 

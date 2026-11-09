@@ -5,7 +5,7 @@ export default defineEventHandler(async event => {
   const postId = Number(getRouterParam(event, 'id'))
   if (!Number.isInteger(postId) || postId < 1) throw createError({ statusCode: 400, statusMessage: 'Invalid post id.' })
   const db = getDatabase()
-  const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(postId)
+  const post = db.prepare("SELECT id FROM posts WHERE id = ? AND status = 'approved'").get(postId)
   if (!post) throw createError({ statusCode: 404, statusMessage: 'Post not found.' })
   const body = await readBody(event)
   const nickname = cleanText(body?.nickname, 'Nickname', 40)

@@ -1,5 +1,5 @@
 import { requireAdmin } from '~/server/utils/admin'
-import { getDatabase } from '~/server/utils/database'
+import { getDatabase, recordProjectVersion } from '~/server/utils/database'
 import { cleanText } from '~/server/utils/validation'
 
 export default defineEventHandler(async event => {
@@ -9,11 +9,19 @@ export default defineEventHandler(async event => {
   const body = await readBody(event)
   const action = body?.action
   const db = getDatabase()
-  const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(id)
+  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(id) as Record<string, any> | undefined
   if (!post) throw createError({ statusCode: 404, statusMessage: 'Post not found.' })
 
   if (action === 'approve') {
-    db.prepare("UPDATE posts SET status = 'approved', reviewedAt = CURRENT_TIMESTAMP, rejectionReason = '' WHERE id = ?").run(id)
+    db.exec('BEGIN')
+    try {
+      db.prepare("UPDATE posts SET status = 'approved', reviewedAt = CURRENT_TIMESTAMP, rejectionReason = '' WHERE id = ?").run(id)
+      recordProjectVersion(db, post, 'First approved version of this project.')
+      db.exec('COMMIT')
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
   } else if (action === 'reject') {
     const reason = body?.reason ? cleanText(body.reason, 'Rejection reason', 500) : ''
     db.prepare("UPDATE posts SET status = 'rejected', reviewedAt = CURRENT_TIMESTAMP, rejectionReason = ? WHERE id = ?").run(reason, id)

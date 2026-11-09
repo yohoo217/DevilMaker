@@ -20,10 +20,12 @@ interface EditablePost {
 const route = useRoute()
 const token = String(route.query.token || '')
 const { data: post, pending, error } = await useFetch<EditablePost>(`/api/posts/${route.params.id}/edit`, { query: { token } })
-const form = reactive({ nickname: '', title: '', category: 'Idea', content: '', imageUrl: '', modelUrl: '', modelFileName: '', modelFileSize: 0 })
+const form = reactive({ nickname: '', title: '', category: 'Idea', content: '', imageUrl: '', modelUrl: '', modelFileName: '', modelFileSize: 0, versionNote: '' })
 const submitting = ref(false)
+const uploading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
+const modelFile = ref<File | null>(null)
 const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : ''
 
 watchEffect(() => {
@@ -38,11 +40,40 @@ watchEffect(() => {
   form.modelFileSize = post.value.modelFileSize
 })
 
+const chooseModel = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  if (file.size > 25 * 1024 * 1024 || !file.name.toLowerCase().endsWith('.stl')) {
+    input.value = ''
+    errorMessage.value = 'Please choose an STL file that is 25 MB or smaller.'
+    return
+  }
+  modelFile.value = file
+  form.modelUrl = ''
+  form.modelFileName = file.name.slice(0, 180)
+  form.modelFileSize = file.size
+}
+
+const uploadModelFile = async () => {
+  if (!modelFile.value) return
+  uploading.value = true
+  try {
+    const body = new FormData()
+    body.append('file', modelFile.value)
+    const uploaded = await $fetch<{ url: string }>('/api/uploads/stl', { method: 'POST', body })
+    form.modelUrl = uploaded.url
+  } finally {
+    uploading.value = false
+  }
+}
+
 const submitEdit = async () => {
   errorMessage.value = ''
   successMessage.value = ''
   submitting.value = true
   try {
+    await uploadModelFile()
     const result = await $fetch<{ status: string }>(`/api/posts/${route.params.id}/edit`, { method: 'POST', body: { ...form, token } })
     successMessage.value = result.status === 'pending'
       ? 'Your changes were saved and are waiting for admin approval.'
@@ -103,9 +134,15 @@ const submitEdit = async () => {
         </select>
         <label class="field-label" for="edit-content">Description</label>
         <textarea id="edit-content" v-model.trim="form.content" class="text-input textarea" maxlength="5000" required rows="10"></textarea>
+        <label class="field-label" for="version-note">What changed in this version? <span class="optional">Optional</span></label>
+        <textarea id="version-note" v-model.trim="form.versionNote" class="text-input textarea" maxlength="500" rows="3" placeholder="Example: adjusted the opening by 0.2 mm after the first fit test."></textarea>
         <label class="field-label" for="edit-image">Image URL <span class="optional">Optional</span></label>
         <input id="edit-image" v-model.trim="form.imageUrl" class="text-input" type="url" placeholder="https://example.com/your-image.jpg">
-        <p v-if="form.modelFileName" class="field-help">STL model attached: {{ form.modelFileName }}</p>
+        <label class="field-label" for="edit-model">New STL model <span class="optional">Optional</span></label>
+        <input id="edit-model" class="text-input file-input" type="file" accept=".stl,model/stl" @change="chooseModel">
+        <p v-if="uploading" class="field-help">Uploading model...</p>
+        <p v-else-if="modelFile" class="field-help">{{ modelFile.name }} will become the next public version after approval.</p>
+        <p v-else-if="form.modelFileName" class="field-help">Current STL: {{ form.modelFileName }}. Upload a replacement to add a new previewable version.</p>
         <div class="form-actions">
           <NuxtLink to="/board" class="button button-secondary">Cancel</NuxtLink>
           <button class="button button-primary" type="submit" :disabled="submitting">{{ submitting ? 'Submitting...' : 'Submit Edit' }}</button>

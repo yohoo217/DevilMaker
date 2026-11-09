@@ -1,12 +1,12 @@
 import { getDatabase } from '~/server/utils/database'
-import { cleanText, optionalModelPath, optionalUrl } from '~/server/utils/validation'
+import { cleanCategory, cleanText, optionalModelPath, optionalUrl } from '~/server/utils/validation'
 import { createEditToken } from '~/server/utils/edit'
 
 export default defineEventHandler(async event => {
   const body = await readBody(event)
   const nickname = cleanText(body?.nickname, 'Nickname', 40)
   const title = cleanText(body?.title, 'Title', 120)
-  const category = cleanText(body?.category, 'Category', 30)
+  const category = cleanCategory(body?.category)
   const content = cleanText(body?.content, 'Description', 5000)
   const imageUrl = optionalUrl(body?.imageUrl)
   const modelUrl = optionalModelPath(body?.modelUrl)

@@ -85,6 +85,17 @@ test('launch workflow covers roles, moderation, uploads, and restart persistence
     const unauthorizedAdmin = await fetch(`${baseUrl}/api/admin/posts`)
     assert.equal(unauthorizedAdmin.status, 401)
 
+    const databaseOverview = await json('/api/admin/database', { headers: { 'x-admin-key': 'launch-test-admin' } })
+    assert.equal(databaseOverview.response.status, 200)
+    assert.equal(databaseOverview.body.summary.posts >= 3, true)
+    const knotSample = databaseOverview.body.posts.find(post => post.title === 'Knot: 2017 Corolla control parts')
+    assert.equal(knotSample.modelUrl, '/models/knot-fit-test-cube-20mm.stl')
+    assert.equal((await fetch(`${baseUrl}${knotSample.modelUrl}`)).status, 200)
+    const publicKnot = await json(`/api/posts/${knotSample.id}`)
+    assert.equal(publicKnot.response.status, 200)
+    assert.equal(publicKnot.body.versions.length, 3)
+    assert.equal((await fetch(`${baseUrl}/models/knot-v1-wedge.stl`)).status, 200)
+
     const invalidImageForm = new FormData()
     invalidImageForm.set('file', new File(['not an image'], 'launch-test.txt', { type: 'text/plain' }))
     assert.equal((await fetch(`${baseUrl}/api/uploads/image`, { method: 'POST', body: invalidImageForm })).status, 400)
@@ -98,6 +109,16 @@ test('launch workflow covers roles, moderation, uploads, and restart persistence
       body: JSON.stringify({ nickname: 'Launch Tester', title: 'Invalid upload path', category: 'Idea', content: 'This should fail.', imageUrl: 'javascript:alert(1)' })
     })
     assert.equal(invalidPost.response.status, 400)
+
+    const invalidCategory = await json('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ nickname: 'Launch Tester', title: 'Invalid category', category: 'Anything', content: 'This should fail.' })
+    })
+    assert.equal(invalidCategory.response.status, 400)
+
+    const spoofedImageForm = new FormData()
+    spoofedImageForm.set('file', new File(['not actually a PNG'], 'spoofed.png', { type: 'image/png' }))
+    assert.equal((await fetch(`${baseUrl}/api/uploads/image`, { method: 'POST', body: spoofedImageForm })).status, 400)
 
     const imageBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
     const imageForm = new FormData()
@@ -134,6 +155,15 @@ test('launch workflow covers roles, moderation, uploads, and restart persistence
     assert.equal(boardBeforeApproval.body.some(post => post.id === postId), false)
     assert.equal((await fetch(`${baseUrl}${image.url}`)).status, 404)
     assert.equal((await fetch(`${baseUrl}${model.url}`)).status, 404)
+    assert.equal((await fetch(`${baseUrl}${image.url.replace('/api/images/', '/api/admin/images/')}`)).status, 401)
+    assert.equal((await fetch(`${baseUrl}${image.url.replace('/api/images/', '/api/admin/images/')}`, { headers: { 'x-admin-key': 'launch-test-admin' } })).status, 200)
+    assert.equal((await fetch(`${baseUrl}${model.url.replace('/api/models/', '/api/admin/models/')}`, { headers: { 'x-admin-key': 'launch-test-admin' } })).status, 200)
+
+    const pendingComment = await json(`/api/posts/${postId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ nickname: 'Reply Tester', content: 'This should not be accepted before approval.' })
+    })
+    assert.equal(pendingComment.response.status, 404)
 
     const pendingAdmin = await json('/api/admin/posts', { headers: { 'x-admin-key': 'launch-test-admin' } })
     assert.equal(pendingAdmin.response.status, 200)
@@ -186,6 +216,7 @@ test('launch workflow covers roles, moderation, uploads, and restart persistence
 
     const publicAfterEditApproval = await json(`/api/posts/${postId}`)
     assert.equal(publicAfterEditApproval.body.title, '[TEST] Launch workflow post updated')
+    assert.equal(publicAfterEditApproval.body.versions.length, 2)
 
     const comment = await json(`/api/posts/${postId}/comments`, {
       method: 'POST',

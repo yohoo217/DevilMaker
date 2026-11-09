@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getDatabase } from '~/server/utils/database'
+import { getUploadDirectory } from '~/server/utils/uploads'
 
 export default defineEventHandler(async event => {
   const filename = getRouterParam(event, 'filename') || ''
@@ -9,10 +10,12 @@ export default defineEventHandler(async event => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid model file.' })
   }
   const modelUrl = `/api/models/${filename}`
-  const post = getDatabase().prepare("SELECT id FROM posts WHERE modelUrl = ? AND status = 'approved'").get(modelUrl)
-  if (!post) throw createError({ statusCode: 404, statusMessage: 'Model not found.' })
+  const db = getDatabase()
+  const post = db.prepare("SELECT id FROM posts WHERE modelUrl = ? AND status = 'approved'").get(modelUrl)
+  const version = db.prepare('SELECT id FROM project_versions WHERE modelUrl = ?').get(modelUrl)
+  if (!post && !version) throw createError({ statusCode: 404, statusMessage: 'Model not found.' })
 
-  const filePath = join(process.cwd(), 'data', 'uploads', 'stl', filename)
+  const filePath = join(getUploadDirectory('stl'), filename)
   try {
     const fileStats = await stat(filePath)
     setResponseHeader(event, 'content-type', 'model/stl')

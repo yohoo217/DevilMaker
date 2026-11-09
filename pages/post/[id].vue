@@ -4,7 +4,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { STLLoader } from 'three/addons/loaders/STLLoader.js'
 
 interface Comment { id: number; nickname: string; content: string; createdAt: string }
-interface Post { id: number; nickname: string; title: string; category: string; content: string; imageUrl: string; modelUrl: string; modelFileName: string; modelFileSize: number; createdAt: string; comments: Comment[] }
+interface ProjectVersion { id: number; versionNumber: number; label: string; note: string; imageUrl: string; modelUrl: string; modelFileName: string; modelFileSize: number; createdAt: string }
+interface Post { id: number; nickname: string; title: string; category: string; content: string; imageUrl: string; modelUrl: string; modelFileName: string; modelFileSize: number; createdAt: string; comments: Comment[]; versions: ProjectVersion[] }
 
 const route = useRoute()
 const { data: post, pending, error, refresh } = await useFetch<Post>(`/api/posts/${route.params.id}`)
@@ -12,6 +13,7 @@ const commentForm = reactive({ nickname: '', content: '' })
 const submitting = ref(false)
 const errorMessage = ref('')
 const modelViewer = ref<HTMLElement | null>(null)
+const selectedVersionId = ref<number | null>(null)
 let renderer: THREE.WebGLRenderer | null = null
 let animationFrame = 0
 let viewerCleanup: (() => void) | null = null
@@ -19,9 +21,11 @@ let viewerCleanup: (() => void) | null = null
 const formatDate = (value: string) => new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 
 const formatFileSize = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
+const selectedVersion = computed(() => post.value?.versions.find(version => version.id === selectedVersionId.value) || post.value?.versions.at(-1))
+const selectedModel = computed(() => selectedVersion.value?.modelUrl ? selectedVersion.value : (post.value?.modelUrl ? post.value : null))
 
 const setupModelViewer = async () => {
-  if (!post.value?.modelUrl || !modelViewer.value) return
+  if (!selectedModel.value?.modelUrl || !modelViewer.value) return
   const container = modelViewer.value
   const scene = new THREE.Scene()
   scene.background = new THREE.Color('#1f1f1f')
@@ -41,7 +45,7 @@ const setupModelViewer = async () => {
   controls.maxDistance = 12
 
   try {
-    const geometry = await new STLLoader().loadAsync(post.value.modelUrl)
+    const geometry = await new STLLoader().loadAsync(selectedModel.value.modelUrl)
     geometry.computeBoundingBox()
     geometry.computeVertexNormals()
     const center = geometry.boundingBox?.getCenter(new THREE.Vector3()) || new THREE.Vector3()
@@ -102,6 +106,18 @@ const geometryCleanup = (scene: THREE.Scene) => {
 onMounted(setupModelViewer)
 onBeforeUnmount(() => viewerCleanup?.())
 
+watch(() => selectedModel.value?.id, async () => {
+  if (!modelViewer.value) return
+  viewerCleanup?.()
+  viewerCleanup = null
+  await nextTick()
+  await setupModelViewer()
+})
+
+watch(() => post.value?.versions, versions => {
+  if (versions?.length && !versions.some(version => version.id === selectedVersionId.value)) selectedVersionId.value = versions.at(-1)?.id || null
+}, { immediate: true })
+
 const submitComment = async () => {
   errorMessage.value = ''
   submitting.value = true
@@ -135,18 +151,34 @@ const submitComment = async () => {
           <span class="article-reply-count">{{ post.comments.length }} {{ post.comments.length === 1 ? 'reply' : 'replies' }}</span>
         </div>
         <img v-if="post.imageUrl" :src="post.imageUrl" :alt="`Image for ${post.title}`" class="article-image">
-        <section v-if="post.modelUrl" class="model-section" aria-label="3D model preview">
+        <section v-if="post.versions.length" class="version-section" aria-label="Project version history">
+          <div class="version-heading">
+            <div>
+              <p class="section-kicker">PROJECT PROGRESS</p>
+              <h2>{{ post.versions.length }} approved version{{ post.versions.length === 1 ? '' : 's' }}</h2>
+            </div>
+            <span>Public history</span>
+          </div>
+          <div class="version-list" role="tablist" aria-label="Project versions">
+            <button v-for="version in post.versions" :key="version.id" type="button" :class="['version-item', { active: selectedVersion?.id === version.id }]" role="tab" :aria-selected="selectedVersion?.id === version.id" @click="selectedVersionId = version.id">
+              <strong>{{ version.label }}</strong>
+              <time :datetime="version.createdAt">{{ formatDate(version.createdAt) }}</time>
+            </button>
+          </div>
+          <p v-if="selectedVersion?.note" class="version-note">{{ selectedVersion.note }}</p>
+        </section>
+        <section v-if="selectedModel" class="model-section" aria-label="3D model preview">
           <div class="model-heading">
             <div>
-              <p class="section-kicker">3D MODEL</p>
-              <h2>{{ post.modelFileName || 'STL model' }}</h2>
+              <p class="section-kicker">{{ selectedVersion ? selectedVersion.label : '3D MODEL' }}</p>
+              <h2>{{ selectedModel.modelFileName || 'STL model' }}</h2>
             </div>
-            <a :href="post.modelUrl" class="model-download" download>Download STL</a>
+            <a :href="selectedModel.modelUrl" class="model-download" download>Download STL</a>
           </div>
           <div ref="modelViewer" class="model-viewer">
             <span v-if="false">Loading 3D preview...</span>
           </div>
-          <p class="model-help">Drag to rotate. Scroll or pinch to zoom. {{ formatFileSize(post.modelFileSize) }}</p>
+          <p class="model-help">Drag to rotate. Scroll or pinch to zoom. {{ formatFileSize(selectedModel.modelFileSize) }}</p>
         </section>
         <p class="article-content">{{ post.content }}</p>
       </article>

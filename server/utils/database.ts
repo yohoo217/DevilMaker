@@ -10,14 +10,20 @@ const seedPosts = [
     title: 'How can I improve this desk accessory?',
     category: 'Idea',
     content: 'I want to create a small 3D printed desk accessory that keeps one charging cable in place. What would make this useful for your workspace?',
-    imageUrl: '', modelUrl: '', modelFileName: '', modelFileSize: 0
+    imageUrl: '',
+    modelUrl: '',
+    modelFileName: '',
+    modelFileSize: 0
   },
   {
     nickname: 'Jordan',
     title: 'Looking for a simple design to print',
     category: 'Help',
     content: 'I am learning basic CAD and would like to start with a practical project. What is a good first object to design and test?',
-    imageUrl: '', modelUrl: '', modelFileName: '', modelFileSize: 0
+    imageUrl: '',
+    modelUrl: '',
+    modelFileName: '',
+    modelFileSize: 0
   },
   {
     nickname: 'Maya',
@@ -74,11 +80,26 @@ export function getDatabase(path = useRuntimeConfig().databasePath) {
       modelUrl TEXT NOT NULL DEFAULT '',
       modelFileName TEXT NOT NULL DEFAULT '',
       modelFileSize INTEGER NOT NULL DEFAULT 0,
+      versionNote TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'pending',
       rejectionReason TEXT NOT NULL DEFAULT '',
       reviewedAt TEXT,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (postId) REFERENCES posts(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS project_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      postId INTEGER NOT NULL,
+      versionNumber INTEGER NOT NULL,
+      label TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      imageUrl TEXT NOT NULL DEFAULT '',
+      modelUrl TEXT NOT NULL DEFAULT '',
+      modelFileName TEXT NOT NULL DEFAULT '',
+      modelFileSize INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (postId) REFERENCES posts(id) ON DELETE CASCADE,
+      UNIQUE(postId, versionNumber)
     );
   `)
 
@@ -97,6 +118,8 @@ export function getDatabase(path = useRuntimeConfig().databasePath) {
   migrations.forEach(([name, statement]) => {
     if (!columnNames.has(name)) database.exec(statement)
   })
+  const revisionColumns = new Set((database.prepare('PRAGMA table_info(post_revisions)').all() as Array<{ name: string }>).map(column => column.name))
+  if (!revisionColumns.has('versionNote')) database.exec("ALTER TABLE post_revisions ADD COLUMN versionNote TEXT NOT NULL DEFAULT ''")
   database.exec("UPDATE posts SET status = 'approved' WHERE status = '' OR status IS NULL")
 
   const insertIfMissing = database.prepare(`
@@ -111,15 +134,50 @@ export function getDatabase(path = useRuntimeConfig().databasePath) {
   `)
   database.exec('BEGIN')
   try {
-    seedPosts.forEach(post => insertIfMissing.run(post.nickname, post.title, post.category, post.content, post.imageUrl, post.modelUrl, post.modelFileName, post.modelFileSize, post.title))
+    seedPosts.forEach(post => insertIfMissing.run(post.nickname, post.title, post.category, post.content, post.imageUrl, post.modelUrl || '', post.modelFileName || '', post.modelFileSize || 0, post.title))
     const knot = seedPosts.find(post => post.title === 'Knot: 2017 Corolla control parts')!
     refreshKnotSample.run(knot.content, knot.imageUrl, knot.modelUrl, knot.modelFileName, knot.modelFileSize, knot.title, knot.nickname)
+    database.prepare(`
+      INSERT INTO project_versions (postId, versionNumber, label, note, imageUrl, modelUrl, modelFileName, modelFileSize)
+      SELECT id, 1, 'V1 · Initial release', 'First approved version of this project.', imageUrl, modelUrl, modelFileName, modelFileSize
+      FROM posts
+      WHERE title != 'Knot: 2017 Corolla control parts'
+        AND NOT EXISTS (SELECT 1 FROM project_versions WHERE project_versions.postId = posts.id)
+    `).run()
+    database.prepare(`
+      INSERT INTO project_versions (postId, versionNumber, label, note, imageUrl, modelUrl, modelFileName, modelFileSize, createdAt)
+      SELECT id, 1, 'V1 · Shape study', 'Started with a low-profile wedge to validate the overall footprint before measuring the original part.', imageUrl, '/models/knot-v1-wedge.stl', 'knot-v1-wedge.stl', 984, datetime('now', '-21 days')
+      FROM posts
+      WHERE title = 'Knot: 2017 Corolla control parts'
+        AND NOT EXISTS (SELECT 1 FROM project_versions WHERE project_versions.postId = posts.id)
+    `).run()
+    database.prepare(`
+      INSERT INTO project_versions (postId, versionNumber, label, note, imageUrl, modelUrl, modelFileName, modelFileSize, createdAt)
+      SELECT id, 2, 'V2 · Calibration check', 'Moved to a 20 mm calibration cube to measure printer error and set the fitting tolerance.', imageUrl, '/models/knot-fit-test-cube-20mm.stl', 'knot-fit-test-cube-20mm.stl', 1778, datetime('now', '-14 days')
+      FROM posts
+      WHERE title = 'Knot: 2017 Corolla control parts'
+        AND NOT EXISTS (SELECT 1 FROM project_versions WHERE project_versions.postId = posts.id AND versionNumber = 2)
+    `).run()
+    database.prepare(`
+      INSERT INTO project_versions (postId, versionNumber, label, note, imageUrl, modelUrl, modelFileName, modelFileSize, createdAt)
+      SELECT id, 3, 'V3 · Current fit-test', 'Current printable reference model. Next: measure the actual knob and publish a thin fit-test ring.', imageUrl, modelUrl, modelFileName, modelFileSize, datetime('now', '-2 days')
+      FROM posts
+      WHERE title = 'Knot: 2017 Corolla control parts'
+        AND NOT EXISTS (SELECT 1 FROM project_versions WHERE project_versions.postId = posts.id AND versionNumber = 3)
+    `).run()
     database.exec('COMMIT')
   } catch (error) {
     database.exec('ROLLBACK')
     throw error
   }
   return database
+}
+
+export function recordProjectVersion(db: DatabaseSync, post: Record<string, any>, note = '') {
+  const versionNumber = Number((db.prepare('SELECT COALESCE(MAX(versionNumber), 0) AS versionNumber FROM project_versions WHERE postId = ?').get(post.id) as { versionNumber: number }).versionNumber) + 1
+  const label = `V${versionNumber} · ${versionNumber === 1 ? 'Initial release' : 'Project update'}`
+  db.prepare('INSERT INTO project_versions (postId, versionNumber, label, note, imageUrl, modelUrl, modelFileName, modelFileSize) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(post.id, versionNumber, label, note || (versionNumber === 1 ? 'First approved version of this project.' : 'Approved project update.'), post.imageUrl || '', post.modelUrl || '', post.modelFileName || '', post.modelFileSize || 0)
 }
 
 export function closeDatabase() {

@@ -7,5 +7,6 @@ export default defineEventHandler(event => {
   const post = db.prepare("SELECT id, nickname, title, category, content, CASE WHEN imageUrl = '' THEN '/default-idea.svg' ELSE imageUrl END AS imageUrl, modelUrl, modelFileName, modelFileSize, createdAt FROM posts WHERE id = ? AND status = 'approved'").get(id)
   if (!post) throw createError({ statusCode: 404, statusMessage: 'Post not found.' })
   const comments = db.prepare('SELECT id, nickname, content, createdAt FROM comments WHERE postId = ? ORDER BY datetime(createdAt) ASC, id ASC').all(id)
-  return { ...post, comments }
+  const versions = db.prepare("SELECT id, versionNumber, label, note, CASE WHEN imageUrl = '' THEN '/default-idea.svg' ELSE imageUrl END AS imageUrl, modelUrl, modelFileName, modelFileSize, createdAt FROM project_versions WHERE postId = ? ORDER BY versionNumber ASC").all(id)
+  return { ...post, comments, versions }
 })
