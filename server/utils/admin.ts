@@ -1,3 +1,5 @@
+import type { H3Event } from 'h3'
+
 export function requireAdmin(event: H3Event) {
   const config = useRuntimeConfig()
   const suppliedKey = getHeader(event, 'x-admin-key')

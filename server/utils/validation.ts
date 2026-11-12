@@ -9,6 +9,14 @@ export function cleanText(value: unknown, field: string, maxLength: number) {
   return text
 }
 
+export function optionalEmail(value: unknown) {
+  if (value === undefined || value === null || value === '') return ''
+  if (typeof value !== 'string' || value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
+    throw createError({ statusCode: 400, statusMessage: 'Email address is invalid.' })
+  }
+  return value.trim()
+}
+
 const allowedCategories = new Set(['Idea', 'Help', 'Project', 'Inspiration'])
 
 export function cleanCategory(value: unknown) {

@@ -116,6 +116,12 @@ test('launch workflow covers roles, moderation, uploads, and restart persistence
     })
     assert.equal(invalidCategory.response.status, 400)
 
+    const invalidEmail = await json('/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ nickname: 'Launch Tester', title: 'Invalid email', category: 'Idea', content: 'This should fail.', contactEmail: 'not-an-email' })
+    })
+    assert.equal(invalidEmail.response.status, 400)
+
     const spoofedImageForm = new FormData()
     spoofedImageForm.set('file', new File(['not actually a PNG'], 'spoofed.png', { type: 'image/png' }))
     assert.equal((await fetch(`${baseUrl}/api/uploads/image`, { method: 'POST', body: spoofedImageForm })).status, 400)
@@ -127,11 +133,29 @@ test('launch workflow covers roles, moderation, uploads, and restart persistence
     assert.equal(imageUpload.status, 200)
     const image = await imageUpload.json()
 
+    const progressImageForm = new FormData()
+    progressImageForm.set('file', new File([imageBytes], 'progress.png', { type: 'image/png' }))
+    const progressImageUpload = await fetch(`${baseUrl}/api/uploads/image`, { method: 'POST', body: progressImageForm })
+    assert.equal(progressImageUpload.status, 200)
+    const progressImage = await progressImageUpload.json()
+
+    const replyImageForm = new FormData()
+    replyImageForm.set('file', new File([imageBytes], 'reply.png', { type: 'image/png' }))
+    const replyImageUpload = await fetch(`${baseUrl}/api/uploads/image`, { method: 'POST', body: replyImageForm })
+    assert.equal(replyImageUpload.status, 200)
+    const replyImage = await replyImageUpload.json()
+
     const modelForm = new FormData()
     modelForm.set('file', new File(['solid test\nendsolid test'], 'launch-test.stl', { type: 'model/stl' }))
     const modelUpload = await fetch(`${baseUrl}/api/uploads/stl`, { method: 'POST', body: modelForm })
     assert.equal(modelUpload.status, 200)
     const model = await modelUpload.json()
+
+    const replyModelForm = new FormData()
+    replyModelForm.set('file', new File(['solid reply\nendsolid reply'], 'reply-test.stl', { type: 'model/stl' }))
+    const replyModelUpload = await fetch(`${baseUrl}/api/uploads/stl`, { method: 'POST', body: replyModelForm })
+    assert.equal(replyModelUpload.status, 200)
+    const replyModel = await replyModelUpload.json()
 
     const created = await json('/api/posts', {
       method: 'POST',
@@ -143,7 +167,8 @@ test('launch workflow covers roles, moderation, uploads, and restart persistence
         imageUrl: image.url,
         modelUrl: model.url,
         modelFileName: model.fileName,
-        modelFileSize: model.fileSize
+        modelFileSize: model.fileSize,
+        contactEmail: 'post-author@example.com'
       })
     })
     assert.equal(created.response.status, 201)
@@ -181,6 +206,9 @@ test('launch workflow covers roles, moderation, uploads, and restart persistence
     const publicPost = await json(`/api/posts/${postId}`)
     assert.equal(publicPost.response.status, 200)
     assert.equal(publicPost.body.title, '[TEST] Launch workflow post')
+    assert.equal(Object.hasOwn(publicPost.body, 'contactEmail'), false)
+    const privateEditPage = await json(`/api/posts/${postId}/edit?token=${editToken}`)
+    assert.equal(privateEditPage.body.contactEmail, 'post-author@example.com')
 
     const edited = await json(`/api/posts/${postId}/edit`, {
       method: 'POST',
@@ -190,14 +218,16 @@ test('launch workflow covers roles, moderation, uploads, and restart persistence
         title: '[TEST] Launch workflow post updated',
         category: 'Project',
         content: 'The approved edit is now public.',
-        imageUrl: image.url,
+        imageUrl: progressImage.url,
         modelUrl: model.url,
         modelFileName: model.fileName,
-        modelFileSize: model.fileSize
+        modelFileSize: model.fileSize,
+        contactEmail: 'post-author@example.com'
       })
     })
     assert.equal(edited.response.status, 200)
     assert.equal(edited.body.status, 'revision_pending')
+    assert.equal((await fetch(`${baseUrl}${progressImage.url}`)).status, 404)
 
     const publicBeforeEditApproval = await json(`/api/posts/${postId}`)
     assert.equal(publicBeforeEditApproval.body.title, '[TEST] Launch workflow post')
@@ -217,14 +247,88 @@ test('launch workflow covers roles, moderation, uploads, and restart persistence
     const publicAfterEditApproval = await json(`/api/posts/${postId}`)
     assert.equal(publicAfterEditApproval.body.title, '[TEST] Launch workflow post updated')
     assert.equal(publicAfterEditApproval.body.versions.length, 2)
+    assert.equal(publicAfterEditApproval.body.imageUrl, progressImage.url)
+    assert.equal((await fetch(`${baseUrl}${progressImage.url}`)).status, 200)
+    assert.equal(publicAfterEditApproval.body.versions[1].imageUrl, progressImage.url)
+
+    assert.equal((await fetch(`${baseUrl}${replyImage.url}`)).status, 404)
+    assert.equal((await fetch(`${baseUrl}${replyModel.url}`)).status, 404)
 
     const comment = await json(`/api/posts/${postId}/comments`, {
       method: 'POST',
-      body: JSON.stringify({ nickname: 'Reply Tester', content: 'Launch workflow reply.' })
+      body: JSON.stringify({
+        nickname: 'Reply Tester',
+        content: 'Launch workflow reply.',
+        projectVersionId: publicAfterEditApproval.body.versions[0].id,
+        imageUrl: replyImage.url
+      })
     })
     assert.equal(comment.response.status, 201)
+    assert.equal(comment.body.authorNotified, false)
     const postWithComment = await json(`/api/posts/${postId}`)
     assert.equal(postWithComment.body.comments.length, 1)
+    assert.equal(postWithComment.body.comments[0].projectVersionId, publicAfterEditApproval.body.versions[0].id)
+    assert.equal(postWithComment.body.comments[0].projectVersionLabel, publicAfterEditApproval.body.versions[0].label)
+    assert.equal(postWithComment.body.comments[0].imageUrl, replyImage.url)
+    assert.equal((await fetch(`${baseUrl}${replyImage.url}`)).status, 200)
+
+    const stlReply = await json(`/api/posts/${postId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({
+        nickname: 'Model Reply Tester',
+        content: 'An STL attachment reply.',
+        modelUrl: replyModel.url,
+        modelFileName: replyModel.fileName,
+        modelFileSize: replyModel.fileSize
+      })
+    })
+    assert.equal(stlReply.response.status, 201)
+    assert.equal((await fetch(`${baseUrl}${replyModel.url}`)).status, 200)
+
+    const invalidDualAttachment = await json(`/api/posts/${postId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({
+        nickname: 'Reply Tester',
+        content: 'Choose only one attachment.',
+        imageUrl: replyImage.url,
+        modelUrl: replyModel.url,
+        modelFileName: replyModel.fileName,
+        modelFileSize: replyModel.fileSize
+      })
+    })
+    assert.equal(invalidDualAttachment.response.status, 400)
+
+    const invalidReplyVersion = await json(`/api/posts/${postId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ nickname: 'Reply Tester', content: 'Invalid version.', projectVersionId: 999999 })
+    })
+    assert.equal(invalidReplyVersion.response.status, 400)
+
+    const invalidReport = await json(`/api/posts/${postId}/reports`, {
+      method: 'POST',
+      body: JSON.stringify({ targetType: 'post', reason: 'Something else' })
+    })
+    assert.equal(invalidReport.response.status, 400)
+
+    const postReport = await json(`/api/posts/${postId}/reports`, {
+      method: 'POST',
+      body: JSON.stringify({ targetType: 'post', reason: 'Spam', details: 'Test post report.' })
+    })
+    assert.equal(postReport.response.status, 201)
+    assert.equal(postReport.body.emailSent, false)
+
+    const replyReport = await json(`/api/posts/${postId}/reports`, {
+      method: 'POST',
+      body: JSON.stringify({ targetType: 'comment', commentId: postWithComment.body.comments[0].id, reason: 'Other' })
+    })
+    assert.equal(replyReport.response.status, 201)
+    assert.equal(replyReport.body.emailSent, false)
+
+    const unrelatedReplyReport = await json(`/api/posts/${postId}/reports`, {
+      method: 'POST',
+      body: JSON.stringify({ targetType: 'comment', commentId: 999999, reason: 'Spam' })
+    })
+    assert.equal(unrelatedReplyReport.response.status, 404)
 
     const rejectedCreated = await json('/api/posts', {
       method: 'POST',
@@ -256,6 +360,8 @@ test('launch workflow covers roles, moderation, uploads, and restart persistence
     const afterRestart = await json(`/api/posts/${postId}`)
     assert.equal(afterRestart.response.status, 200)
     assert.equal(afterRestart.body.title, '[TEST] Launch workflow post updated')
+    assert.equal(afterRestart.body.comments[0].imageUrl, replyImage.url)
+    assert.equal(afterRestart.body.comments[1].modelUrl, replyModel.url)
   } finally {
     await stopServer(server)
     await rm(directory, { recursive: true, force: true })

@@ -42,8 +42,9 @@ export function getDatabase(path = useRuntimeConfig().databasePath) {
   const absolutePath = resolve(process.cwd(), path)
   mkdirSync(dirname(absolutePath), { recursive: true })
   database = new DatabaseSync(absolutePath)
-  database.exec('PRAGMA foreign_keys = ON')
-  database.exec(`
+  const db = database
+  db.exec('PRAGMA foreign_keys = ON')
+  db.exec(`
     CREATE TABLE IF NOT EXISTS posts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nickname TEXT NOT NULL,
@@ -54,6 +55,7 @@ export function getDatabase(path = useRuntimeConfig().databasePath) {
       modelUrl TEXT NOT NULL DEFAULT '',
       modelFileName TEXT NOT NULL DEFAULT '',
       modelFileSize INTEGER NOT NULL DEFAULT 0,
+      contactEmail TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'pending',
       pinned INTEGER NOT NULL DEFAULT 0,
       reviewedAt TEXT,
@@ -66,8 +68,27 @@ export function getDatabase(path = useRuntimeConfig().databasePath) {
       postId INTEGER NOT NULL,
       nickname TEXT NOT NULL,
       content TEXT NOT NULL,
+      imageUrl TEXT NOT NULL DEFAULT '',
+      modelUrl TEXT NOT NULL DEFAULT '',
+      modelFileName TEXT NOT NULL DEFAULT '',
+      modelFileSize INTEGER NOT NULL DEFAULT 0,
+      projectVersionId INTEGER,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (postId) REFERENCES posts(id) ON DELETE CASCADE
+      FOREIGN KEY (postId) REFERENCES posts(id) ON DELETE CASCADE,
+      FOREIGN KEY (projectVersionId) REFERENCES project_versions(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      targetType TEXT NOT NULL CHECK (targetType IN ('post', 'comment')),
+      postId INTEGER NOT NULL,
+      commentId INTEGER,
+      reason TEXT NOT NULL,
+      details TEXT NOT NULL DEFAULT '',
+      emailSent INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CHECK ((targetType = 'post' AND commentId IS NULL) OR (targetType = 'comment' AND commentId IS NOT NULL)),
+      FOREIGN KEY (postId) REFERENCES posts(id) ON DELETE CASCADE,
+      FOREIGN KEY (commentId) REFERENCES comments(id) ON DELETE CASCADE
     );
     CREATE TABLE IF NOT EXISTS post_revisions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,6 +101,7 @@ export function getDatabase(path = useRuntimeConfig().databasePath) {
       modelUrl TEXT NOT NULL DEFAULT '',
       modelFileName TEXT NOT NULL DEFAULT '',
       modelFileSize INTEGER NOT NULL DEFAULT 0,
+      contactEmail TEXT NOT NULL DEFAULT '',
       versionNote TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'pending',
       rejectionReason TEXT NOT NULL DEFAULT '',
@@ -103,7 +125,7 @@ export function getDatabase(path = useRuntimeConfig().databasePath) {
     );
   `)
 
-  const columns = database.prepare('PRAGMA table_info(posts)').all() as Array<{ name: string }>
+  const columns = db.prepare('PRAGMA table_info(posts)').all() as Array<{ name: string }>
   const columnNames = new Set(columns.map(column => column.name))
   const migrations = [
     ['modelUrl', "ALTER TABLE posts ADD COLUMN modelUrl TEXT NOT NULL DEFAULT ''"],
@@ -113,64 +135,80 @@ export function getDatabase(path = useRuntimeConfig().databasePath) {
     ['pinned', "ALTER TABLE posts ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0"],
     ['reviewedAt', 'ALTER TABLE posts ADD COLUMN reviewedAt TEXT'],
     ['rejectionReason', "ALTER TABLE posts ADD COLUMN rejectionReason TEXT NOT NULL DEFAULT ''"],
-    ['editTokenHash', "ALTER TABLE posts ADD COLUMN editTokenHash TEXT NOT NULL DEFAULT ''"]
+    ['editTokenHash', "ALTER TABLE posts ADD COLUMN editTokenHash TEXT NOT NULL DEFAULT ''"],
+    ['contactEmail', "ALTER TABLE posts ADD COLUMN contactEmail TEXT NOT NULL DEFAULT ''"]
   ] as const
   migrations.forEach(([name, statement]) => {
-    if (!columnNames.has(name)) database.exec(statement)
+    if (!columnNames.has(name)) db.exec(statement)
   })
-  const revisionColumns = new Set((database.prepare('PRAGMA table_info(post_revisions)').all() as Array<{ name: string }>).map(column => column.name))
-  if (!revisionColumns.has('versionNote')) database.exec("ALTER TABLE post_revisions ADD COLUMN versionNote TEXT NOT NULL DEFAULT ''")
-  database.exec("UPDATE posts SET status = 'approved' WHERE status = '' OR status IS NULL")
+  const revisionColumns = new Set((db.prepare('PRAGMA table_info(post_revisions)').all() as Array<{ name: string }>).map(column => column.name))
+  if (!revisionColumns.has('versionNote')) db.exec("ALTER TABLE post_revisions ADD COLUMN versionNote TEXT NOT NULL DEFAULT ''")
+  if (!revisionColumns.has('contactEmail')) {
+    db.exec("ALTER TABLE post_revisions ADD COLUMN contactEmail TEXT NOT NULL DEFAULT ''")
+    db.exec("UPDATE post_revisions SET contactEmail = (SELECT contactEmail FROM posts WHERE posts.id = post_revisions.postId) WHERE contactEmail = ''")
+  }
+  const commentColumns = new Set((db.prepare('PRAGMA table_info(comments)').all() as Array<{ name: string }>).map(column => column.name))
+  const commentMigrations = [
+    ['imageUrl', "ALTER TABLE comments ADD COLUMN imageUrl TEXT NOT NULL DEFAULT ''"],
+    ['modelUrl', "ALTER TABLE comments ADD COLUMN modelUrl TEXT NOT NULL DEFAULT ''"],
+    ['modelFileName', "ALTER TABLE comments ADD COLUMN modelFileName TEXT NOT NULL DEFAULT ''"],
+    ['modelFileSize', 'ALTER TABLE comments ADD COLUMN modelFileSize INTEGER NOT NULL DEFAULT 0'],
+    ['projectVersionId', 'ALTER TABLE comments ADD COLUMN projectVersionId INTEGER']
+  ] as const
+  commentMigrations.forEach(([name, statement]) => {
+    if (!commentColumns.has(name)) db.exec(statement)
+  })
+  db.exec("UPDATE posts SET status = 'approved' WHERE status = '' OR status IS NULL")
 
-  const insertIfMissing = database.prepare(`
+  const insertIfMissing = db.prepare(`
     INSERT INTO posts (nickname, title, category, content, imageUrl, modelUrl, modelFileName, modelFileSize, status)
     SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'approved'
     WHERE NOT EXISTS (SELECT 1 FROM posts WHERE title = ?)
   `)
-  const refreshKnotSample = database.prepare(`
+  const refreshKnotSample = db.prepare(`
     UPDATE posts
     SET content = ?, imageUrl = ?, modelUrl = ?, modelFileName = ?, modelFileSize = ?
     WHERE title = ? AND nickname = ? AND modelUrl = ''
   `)
-  database.exec('BEGIN')
+  db.exec('BEGIN')
   try {
     seedPosts.forEach(post => insertIfMissing.run(post.nickname, post.title, post.category, post.content, post.imageUrl, post.modelUrl || '', post.modelFileName || '', post.modelFileSize || 0, post.title))
     const knot = seedPosts.find(post => post.title === 'Knot: 2017 Corolla control parts')!
     refreshKnotSample.run(knot.content, knot.imageUrl, knot.modelUrl, knot.modelFileName, knot.modelFileSize, knot.title, knot.nickname)
-    database.prepare(`
+    db.prepare(`
       INSERT INTO project_versions (postId, versionNumber, label, note, imageUrl, modelUrl, modelFileName, modelFileSize)
       SELECT id, 1, 'V1 · Initial release', 'First approved version of this project.', imageUrl, modelUrl, modelFileName, modelFileSize
       FROM posts
       WHERE title != 'Knot: 2017 Corolla control parts'
         AND NOT EXISTS (SELECT 1 FROM project_versions WHERE project_versions.postId = posts.id)
     `).run()
-    database.prepare(`
+    db.prepare(`
       INSERT INTO project_versions (postId, versionNumber, label, note, imageUrl, modelUrl, modelFileName, modelFileSize, createdAt)
       SELECT id, 1, 'V1 · Shape study', 'Started with a low-profile wedge to validate the overall footprint before measuring the original part.', imageUrl, '/models/knot-v1-wedge.stl', 'knot-v1-wedge.stl', 984, datetime('now', '-21 days')
       FROM posts
       WHERE title = 'Knot: 2017 Corolla control parts'
         AND NOT EXISTS (SELECT 1 FROM project_versions WHERE project_versions.postId = posts.id)
     `).run()
-    database.prepare(`
+    db.prepare(`
       INSERT INTO project_versions (postId, versionNumber, label, note, imageUrl, modelUrl, modelFileName, modelFileSize, createdAt)
       SELECT id, 2, 'V2 · Calibration check', 'Moved to a 20 mm calibration cube to measure printer error and set the fitting tolerance.', imageUrl, '/models/knot-fit-test-cube-20mm.stl', 'knot-fit-test-cube-20mm.stl', 1778, datetime('now', '-14 days')
       FROM posts
       WHERE title = 'Knot: 2017 Corolla control parts'
         AND NOT EXISTS (SELECT 1 FROM project_versions WHERE project_versions.postId = posts.id AND versionNumber = 2)
     `).run()
-    database.prepare(`
+    db.prepare(`
       INSERT INTO project_versions (postId, versionNumber, label, note, imageUrl, modelUrl, modelFileName, modelFileSize, createdAt)
       SELECT id, 3, 'V3 · Current fit-test', 'Current printable reference model. Next: measure the actual knob and publish a thin fit-test ring.', imageUrl, modelUrl, modelFileName, modelFileSize, datetime('now', '-2 days')
       FROM posts
       WHERE title = 'Knot: 2017 Corolla control parts'
         AND NOT EXISTS (SELECT 1 FROM project_versions WHERE project_versions.postId = posts.id AND versionNumber = 3)
     `).run()
-    database.exec('COMMIT')
+    db.exec('COMMIT')
   } catch (error) {
-    database.exec('ROLLBACK')
+    db.exec('ROLLBACK')
     throw error
   }
-  return database
+  return db
 }
 
 export function recordProjectVersion(db: DatabaseSync, post: Record<string, any>, note = '') {

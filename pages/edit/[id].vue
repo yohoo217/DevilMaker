@@ -9,6 +9,7 @@ interface EditablePost {
   modelUrl: string
   modelFileName: string
   modelFileSize: number
+  contactEmail: string
   status: string
   rejectionReason: string
   reviewedAt: string | null
@@ -20,12 +21,13 @@ interface EditablePost {
 const route = useRoute()
 const token = String(route.query.token || '')
 const { data: post, pending, error } = await useFetch<EditablePost>(`/api/posts/${route.params.id}/edit`, { query: { token } })
-const form = reactive({ nickname: '', title: '', category: 'Idea', content: '', imageUrl: '', modelUrl: '', modelFileName: '', modelFileSize: 0, versionNote: '' })
+const form = reactive({ nickname: '', title: '', category: 'Idea', content: '', imageUrl: '', modelUrl: '', modelFileName: '', modelFileSize: 0, contactEmail: '', versionNote: '' })
 const submitting = ref(false)
 const uploading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 const modelFile = ref<File | null>(null)
+const imageFile = ref<File | null>(null)
 const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : ''
 
 watchEffect(() => {
@@ -38,6 +40,7 @@ watchEffect(() => {
   form.modelUrl = post.value.modelUrl
   form.modelFileName = post.value.modelFileName
   form.modelFileSize = post.value.modelFileSize
+  form.contactEmail = post.value.contactEmail || ''
 })
 
 const chooseModel = (event: Event) => {
@@ -68,11 +71,33 @@ const uploadModelFile = async () => {
   }
 }
 
+const chooseImageFile = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  if (file.size > 10 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    input.value = ''
+    imageFile.value = null
+    errorMessage.value = 'Please choose a JPG, PNG, or WebP image that is 10 MB or smaller.'
+    return
+  }
+  imageFile.value = file
+}
+
+const uploadImageFile = async () => {
+  if (!imageFile.value) return
+  const body = new FormData()
+  body.append('file', imageFile.value)
+  const uploaded = await $fetch<{ url: string }>('/api/uploads/image', { method: 'POST', body })
+  form.imageUrl = uploaded.url
+}
+
 const submitEdit = async () => {
   errorMessage.value = ''
   successMessage.value = ''
   submitting.value = true
   try {
+    await uploadImageFile()
     await uploadModelFile()
     const result = await $fetch<{ status: string }>(`/api/posts/${route.params.id}/edit`, { method: 'POST', body: { ...form, token } })
     successMessage.value = result.status === 'pending'
@@ -136,6 +161,12 @@ const submitEdit = async () => {
         <textarea id="edit-content" v-model.trim="form.content" class="text-input textarea" maxlength="5000" required rows="10"></textarea>
         <label class="field-label" for="version-note">What changed in this version? <span class="optional">Optional</span></label>
         <textarea id="version-note" v-model.trim="form.versionNote" class="text-input textarea" maxlength="500" rows="3" placeholder="Example: adjusted the opening by 0.2 mm after the first fit test."></textarea>
+        <label class="field-label" for="edit-contact-email">Email for public reply notifications <span class="optional">Optional</span></label>
+        <input id="edit-contact-email" v-model.trim="form.contactEmail" class="text-input" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com">
+        <p class="field-help">Kept private. We will email you when someone replies to your post.</p>
+        <label class="field-label" for="edit-image-file">Upload progress image <span class="optional">Optional</span></label>
+        <input id="edit-image-file" class="text-input file-input" type="file" accept="image/jpeg,image/png,image/webp" @change="chooseImageFile">
+        <p v-if="imageFile" class="field-help">{{ imageFile.name }} will be added to the next version after approval.</p>
         <label class="field-label" for="edit-image">Image URL <span class="optional">Optional</span></label>
         <input id="edit-image" v-model.trim="form.imageUrl" class="text-input" type="url" placeholder="https://example.com/your-image.jpg">
         <label class="field-label" for="edit-model">New STL model <span class="optional">Optional</span></label>

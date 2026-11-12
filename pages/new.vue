@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { STLLoader } from 'three/addons/loaders/STLLoader.js'
 
-const form = reactive({ nickname: '', title: '', category: 'Idea', content: '', imageUrl: '', modelUrl: '', modelFileName: '', modelFileSize: 0 })
+const form = reactive({ nickname: '', title: '', category: 'Idea', content: '', imageUrl: '', modelUrl: '', modelFileName: '', modelFileSize: 0, contactEmail: '' })
 const submitting = ref(false)
 const uploading = ref(false)
 const errorMessage = ref('')
@@ -206,6 +206,10 @@ const submitPost = async () => {
       </div>
       <label class="field-label" for="nickname">Nickname</label>
       <input id="nickname" v-model.trim="form.nickname" class="text-input" maxlength="40" required placeholder="Your nickname">
+
+      <label class="field-label" for="contactEmail">Email for public reply notifications <span class="optional">Optional</span></label>
+      <input id="contactEmail" v-model.trim="form.contactEmail" class="text-input" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com">
+      <p class="field-help">Kept private. We will email you when someone replies to your post.</p>
 
       <label class="field-label" for="title">Title</label>
       <input id="title" v-model.trim="form.title" class="text-input" maxlength="120" required placeholder="What are you thinking about?">

@@ -12,7 +12,7 @@ export default defineEventHandler(async event => {
   try {
     const fileStats = await stat(filePath)
     setResponseHeader(event, 'content-type', 'model/stl')
-    setResponseHeader(event, 'content-length', String(fileStats.size))
+    setResponseHeader(event, 'content-length', fileStats.size)
     setResponseHeader(event, 'content-disposition', `attachment; filename="${filename}"`)
     return sendStream(event, createReadStream(filePath))
   } catch {

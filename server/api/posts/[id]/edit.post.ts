@@ -1,6 +1,6 @@
 import { hashEditToken } from '~/server/utils/edit'
 import { getDatabase } from '~/server/utils/database'
-import { cleanCategory, cleanText, optionalModelPath, optionalUrl } from '~/server/utils/validation'
+import { cleanCategory, cleanText, optionalEmail, optionalModelPath, optionalUrl } from '~/server/utils/validation'
 
 export default defineEventHandler(async event => {
   const id = Number(getRouterParam(event, 'id'))
@@ -14,6 +14,7 @@ export default defineEventHandler(async event => {
   const modelUrl = optionalModelPath(body?.modelUrl)
   const modelFileName = modelUrl ? cleanText(body?.modelFileName, 'STL file name', 180) : ''
   const modelFileSize = modelUrl ? Number(body?.modelFileSize) : 0
+  const contactEmail = optionalEmail(body?.contactEmail)
   const versionNote = body?.versionNote ? cleanText(body.versionNote, 'Version note', 500) : ''
   if (!Number.isInteger(id) || id < 1) throw createError({ statusCode: 400, statusMessage: 'Invalid post id.' })
   if (modelUrl && (!Number.isInteger(modelFileSize) || modelFileSize < 1 || modelFileSize > 25 * 1024 * 1024)) {
@@ -24,9 +25,9 @@ export default defineEventHandler(async event => {
   if (!post) throw createError({ statusCode: 404, statusMessage: 'This edit link is invalid or expired.' })
 
   if (post.status === 'pending' || post.status === 'rejected') {
-    db.prepare("UPDATE posts SET nickname = ?, title = ?, category = ?, content = ?, imageUrl = ?, modelUrl = ?, modelFileName = ?, modelFileSize = ?, status = 'pending', reviewedAt = NULL, rejectionReason = '' WHERE id = ?").run(nickname, title, category, content, imageUrl, modelUrl, modelFileName, modelFileSize, id)
+    db.prepare("UPDATE posts SET nickname = ?, title = ?, category = ?, content = ?, imageUrl = ?, modelUrl = ?, modelFileName = ?, modelFileSize = ?, contactEmail = ?, status = 'pending', reviewedAt = NULL, rejectionReason = '' WHERE id = ?").run(nickname, title, category, content, imageUrl, modelUrl, modelFileName, modelFileSize, contactEmail, id)
   } else {
-    db.prepare('INSERT INTO post_revisions (postId, nickname, title, category, content, imageUrl, modelUrl, modelFileName, modelFileSize, versionNote) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, nickname, title, category, content, imageUrl, modelUrl, modelFileName, modelFileSize, versionNote)
+    db.prepare('INSERT INTO post_revisions (postId, nickname, title, category, content, imageUrl, modelUrl, modelFileName, modelFileSize, contactEmail, versionNote) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, nickname, title, category, content, imageUrl, modelUrl, modelFileName, modelFileSize, contactEmail, versionNote)
   }
   return { ok: true, status: post.status === 'approved' ? 'revision_pending' : 'pending' }
 })

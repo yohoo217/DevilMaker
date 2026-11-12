@@ -3,15 +3,25 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { STLLoader } from 'three/addons/loaders/STLLoader.js'
 
-interface Comment { id: number; nickname: string; content: string; createdAt: string }
+interface Comment { id: number; nickname: string; content: string; imageUrl: string; modelUrl: string; modelFileName: string; modelFileSize: number; projectVersionId: number | null; projectVersionLabel: string | null; createdAt: string }
 interface ProjectVersion { id: number; versionNumber: number; label: string; note: string; imageUrl: string; modelUrl: string; modelFileName: string; modelFileSize: number; createdAt: string }
 interface Post { id: number; nickname: string; title: string; category: string; content: string; imageUrl: string; modelUrl: string; modelFileName: string; modelFileSize: number; createdAt: string; comments: Comment[]; versions: ProjectVersion[] }
 
 const route = useRoute()
 const { data: post, pending, error, refresh } = await useFetch<Post>(`/api/posts/${route.params.id}`)
-const commentForm = reactive({ nickname: '', content: '' })
+const commentForm = reactive({ nickname: '', content: '', imageUrl: '', modelUrl: '', modelFileName: '', modelFileSize: 0, projectVersionId: null as number | null })
+const commentAttachment = ref<File | null>(null)
+const commentFileInput = ref<HTMLInputElement | null>(null)
+const commentResult = ref('')
+const replyFormElement = ref<HTMLElement | null>(null)
+const reportForm = reactive({ targetType: 'post' as 'post' | 'comment', commentId: null as number | null, reason: '', details: '' })
 const submitting = ref(false)
 const errorMessage = ref('')
+const reportOpen = ref(false)
+const reportSubmitting = ref(false)
+const reportError = ref('')
+const reportResult = ref('')
+const reportEmailSent = ref(false)
 const modelViewer = ref<HTMLElement | null>(null)
 const selectedVersionId = ref<number | null>(null)
 let renderer: THREE.WebGLRenderer | null = null
@@ -120,16 +130,92 @@ watch(() => post.value?.versions, versions => {
 
 const submitComment = async () => {
   errorMessage.value = ''
+  commentResult.value = ''
   submitting.value = true
   try {
-    await $fetch(`/api/posts/${route.params.id}/comments`, { method: 'POST', body: commentForm })
+    if (commentAttachment.value) {
+      const body = new FormData()
+      body.append('file', commentAttachment.value)
+      if (commentAttachment.value.name.toLowerCase().endsWith('.stl')) {
+        const uploaded = await $fetch<{ url: string; fileName: string; fileSize: number }>('/api/uploads/stl', { method: 'POST', body })
+        commentForm.modelUrl = uploaded.url
+        commentForm.modelFileName = uploaded.fileName
+        commentForm.modelFileSize = uploaded.fileSize
+      } else {
+        const uploaded = await $fetch<{ url: string }>('/api/uploads/image', { method: 'POST', body })
+        commentForm.imageUrl = uploaded.url
+      }
+    }
+    const result = await $fetch<{ authorNotified: boolean }>(`/api/posts/${route.params.id}/comments`, { method: 'POST', body: commentForm })
+    commentResult.value = result.authorNotified
+      ? 'Your public reply was posted and the original poster was notified by email.'
+      : 'Your public reply was posted. The original poster may not have received an email notification.'
     commentForm.nickname = ''
     commentForm.content = ''
+    commentForm.imageUrl = ''
+    commentForm.modelUrl = ''
+    commentForm.modelFileName = ''
+    commentForm.modelFileSize = 0
+    commentForm.projectVersionId = null
+    commentAttachment.value = null
+    if (commentFileInput.value) commentFileInput.value.value = ''
     await refresh()
   } catch (error: any) {
     errorMessage.value = error?.data?.statusMessage || 'Unable to publish your reply.'
   } finally {
     submitting.value = false
+  }
+}
+
+const chooseCommentAttachment = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  const isStl = file.name.toLowerCase().endsWith('.stl')
+  const validImage = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
+  if ((isStl && file.size > 25 * 1024 * 1024) ||
+      (!isStl && (!validImage || file.size > 10 * 1024 * 1024))) {
+    input.value = ''
+    commentAttachment.value = null
+    errorMessage.value = 'Choose a JPG, PNG, or WebP image up to 10 MB, or an STL file up to 25 MB.'
+    return
+  }
+  errorMessage.value = ''
+  commentAttachment.value = file
+}
+
+const focusReplyForm = () => {
+  replyFormElement.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  nextTick(() => replyFormElement.value?.querySelector('textarea')?.focus())
+}
+
+const openReport = (targetType: 'post' | 'comment', commentId: number | null = null) => {
+  reportForm.targetType = targetType
+  reportForm.commentId = commentId
+  reportForm.reason = ''
+  reportForm.details = ''
+  reportError.value = ''
+  reportResult.value = ''
+  reportEmailSent.value = false
+  reportOpen.value = true
+}
+
+const submitReport = async () => {
+  reportError.value = ''
+  reportSubmitting.value = true
+  try {
+    const result = await $fetch<{ id: number; emailSent: boolean }>(`/api/posts/${route.params.id}/reports`, {
+      method: 'POST',
+      body: reportForm
+    })
+    reportEmailSent.value = result.emailSent
+    reportResult.value = result.emailSent
+      ? 'Thank you. Your report was sent to the moderation inbox.'
+      : 'Your report was saved, but its email notification could not be sent. Please contact the site administrator.'
+  } catch (error: any) {
+    reportError.value = error?.data?.statusMessage || 'Unable to submit your report.'
+  } finally {
+    reportSubmitting.value = false
   }
 }
 </script>
@@ -150,7 +236,7 @@ const submitComment = async () => {
           <h1>{{ post.title }}</h1>
           <span class="article-reply-count">{{ post.comments.length }} {{ post.comments.length === 1 ? 'reply' : 'replies' }}</span>
         </div>
-        <img v-if="post.imageUrl" :src="post.imageUrl" :alt="`Image for ${post.title}`" class="article-image">
+        <img v-if="post.imageUrl && !post.versions.length" :src="post.imageUrl" :alt="`Image for ${post.title}`" class="article-image">
         <section v-if="post.versions.length" class="version-section" aria-label="Project version history">
           <div class="version-heading">
             <div>
@@ -166,6 +252,12 @@ const submitComment = async () => {
             </button>
           </div>
           <p v-if="selectedVersion?.note" class="version-note">{{ selectedVersion.note }}</p>
+          <img
+            v-if="selectedVersion?.imageUrl && selectedVersion.imageUrl !== '/default-idea.svg'"
+            :src="selectedVersion.imageUrl"
+            :alt="`Image for ${selectedVersion.label}`"
+            class="version-image"
+          >
         </section>
         <section v-if="selectedModel" class="model-section" aria-label="3D model preview">
           <div class="model-heading">
@@ -181,6 +273,10 @@ const submitComment = async () => {
           <p class="model-help">Drag to rotate. Scroll or pinch to zoom. {{ formatFileSize(selectedModel.modelFileSize) }}</p>
         </section>
         <p class="article-content">{{ post.content }}</p>
+        <div class="content-actions">
+          <button type="button" class="report-button" @click="openReport('post')">Report post</button>
+          <button type="button" class="button button-secondary contact-author-button" @click="focusReplyForm">Talk to the original poster</button>
+        </div>
       </article>
 
       <section class="replies-section">
@@ -197,20 +293,64 @@ const submitComment = async () => {
             <span class="avatar">{{ comment.nickname.charAt(0).toUpperCase() }}</span>
             <strong>{{ comment.nickname }}</strong>
             <time :datetime="comment.createdAt">{{ formatDate(comment.createdAt) }}</time>
+            <button type="button" class="report-button report-reply-button" @click="openReport('comment', comment.id)">Report reply</button>
           </div>
+          <span v-if="comment.projectVersionLabel" class="reply-version-tag">{{ comment.projectVersionLabel }}</span>
           <p>{{ comment.content }}</p>
+          <img v-if="comment.imageUrl" :src="comment.imageUrl" :alt="`Image attached by ${comment.nickname}`" class="reply-image">
+          <a v-if="comment.modelUrl" :href="comment.modelUrl" class="reply-model-link" download>{{ comment.modelFileName || 'Download STL attachment' }} · {{ formatFileSize(comment.modelFileSize) }}</a>
         </article>
       </section>
 
-      <form class="form-card reply-form" @submit.prevent="submitComment">
+      <form ref="replyFormElement" class="form-card reply-form" @submit.prevent="submitComment">
         <h2>Join the conversation</h2>
         <div v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</div>
+        <div v-if="commentResult" class="form-success" role="status">{{ commentResult }}</div>
+        <p class="field-help">Replies are public. If the original poster left a contact email, we will notify them.</p>
         <label class="field-label" for="reply-nickname">Nickname</label>
         <input id="reply-nickname" v-model.trim="commentForm.nickname" class="text-input" maxlength="40" required placeholder="Your nickname">
+        <label class="field-label" for="reply-version">Version <span class="optional">Optional</span></label>
+        <select id="reply-version" v-model="commentForm.projectVersionId" class="text-input">
+          <option :value="null">General discussion</option>
+          <option v-for="version in post.versions" :key="version.id" :value="version.id">{{ version.label }}</option>
+        </select>
         <label class="field-label" for="reply-content">Reply</label>
         <textarea id="reply-content" v-model.trim="commentForm.content" class="text-input textarea" maxlength="2000" required rows="5" placeholder="Write a helpful reply..."></textarea>
+        <label class="field-label" for="reply-attachment">Attach an image or STL <span class="optional">Optional</span></label>
+        <input id="reply-attachment" ref="commentFileInput" class="text-input file-input" type="file" accept="image/jpeg,image/png,image/webp,.stl,model/stl" @change="chooseCommentAttachment">
+        <p class="field-help">Upload one JPG, PNG, or WebP image up to 10 MB, or one STL file up to 25 MB.</p>
+        <p v-if="commentAttachment" class="field-help">{{ commentAttachment.name }} is ready to attach.</p>
         <div class="form-actions"><button class="button button-primary" type="submit" :disabled="submitting">{{ submitting ? 'Publishing...' : 'Publish Reply' }}</button></div>
       </form>
     </template>
+    <div v-if="reportOpen" class="report-backdrop" @click.self="reportOpen = false">
+      <section class="report-dialog" role="dialog" aria-modal="true" aria-labelledby="report-title">
+        <h2 id="report-title">Report {{ reportForm.targetType === 'post' ? 'post' : 'reply' }}</h2>
+        <div v-if="reportError" class="report-error" role="alert">{{ reportError }}</div>
+        <div v-if="reportResult" :class="['report-result', reportEmailSent ? 'report-result-success' : 'report-result-warning']" role="status">
+          {{ reportResult }}
+        </div>
+        <form v-else @submit.prevent="submitReport">
+          <label class="field-label" for="report-reason">Reason</label>
+          <select id="report-reason" v-model="reportForm.reason" class="text-input" required>
+            <option value="" disabled>Select a reason</option>
+            <option>Spam</option>
+            <option>Harassment</option>
+            <option>Inappropriate content</option>
+            <option>Copyright</option>
+            <option>Other</option>
+          </select>
+          <label class="field-label" for="report-details">Additional details <span class="optional">(optional)</span></label>
+          <textarea id="report-details" v-model.trim="reportForm.details" class="text-input textarea" maxlength="1000" rows="4" placeholder="Add context to help us review this report."></textarea>
+          <div class="form-actions">
+            <button class="button button-secondary" type="button" @click="reportOpen = false">Cancel</button>
+            <button class="button button-primary" type="submit" :disabled="reportSubmitting">{{ reportSubmitting ? 'Sending...' : 'Submit report' }}</button>
+          </div>
+        </form>
+        <div v-if="reportResult" class="form-actions">
+          <button class="button button-secondary" type="button" @click="reportOpen = false">Close</button>
+        </div>
+      </section>
+    </div>
   </section>
 </template>

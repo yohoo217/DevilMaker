@@ -15,7 +15,7 @@ export default defineEventHandler(async event => {
     const fileStats = await stat(filePath)
     const extension = filename.split('.').pop()?.toLowerCase() || 'jpg'
     setResponseHeader(event, 'content-type', contentTypes[extension])
-    setResponseHeader(event, 'content-length', String(fileStats.size))
+    setResponseHeader(event, 'content-length', fileStats.size)
     setResponseHeader(event, 'content-disposition', `inline; filename="${filename}"`)
     return sendStream(event, createReadStream(filePath))
   } catch {

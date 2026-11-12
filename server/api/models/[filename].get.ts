@@ -13,13 +13,17 @@ export default defineEventHandler(async event => {
   const db = getDatabase()
   const post = db.prepare("SELECT id FROM posts WHERE modelUrl = ? AND status = 'approved'").get(modelUrl)
   const version = db.prepare('SELECT id FROM project_versions WHERE modelUrl = ?').get(modelUrl)
-  if (!post && !version) throw createError({ statusCode: 404, statusMessage: 'Model not found.' })
+  const comment = db.prepare(`
+    SELECT c.id FROM comments c JOIN posts p ON p.id = c.postId
+    WHERE c.modelUrl = ? AND p.status = 'approved'
+  `).get(modelUrl)
+  if (!post && !version && !comment) throw createError({ statusCode: 404, statusMessage: 'Model not found.' })
 
   const filePath = join(getUploadDirectory('stl'), filename)
   try {
     const fileStats = await stat(filePath)
     setResponseHeader(event, 'content-type', 'model/stl')
-    setResponseHeader(event, 'content-length', String(fileStats.size))
+    setResponseHeader(event, 'content-length', fileStats.size)
     setResponseHeader(event, 'content-disposition', `inline; filename="${filename}"`)
     return sendStream(event, createReadStream(filePath))
   } catch {

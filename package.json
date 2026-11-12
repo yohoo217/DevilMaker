@@ -10,12 +10,20 @@
     "build": "nuxt build",
     "start": "node .output/server/index.mjs",
     "preview": "nuxt preview",
+    "typecheck": "nuxt prepare && vue-tsc --noEmit",
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
+    "nodemailer": "^10.5.0",
     "nuxt": "^3.14.1592",
     "three": "^0.186.1",
     "vue": "latest",
     "vue-router": "latest"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.2",
+    "@types/three": "^0.187.0",
+    "typescript": "^6.0.3",
+    "vue-tsc": "^3.3.14"
   }
 }

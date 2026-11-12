@@ -78,7 +78,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('en', {
         <div v-if="pending || filterPending" class="state-card">Loading posts...</div>
         <div v-else-if="error || filterError" class="state-card state-error">
           Unable to load posts.
-          <button class="text-button" @click="refreshPosts">Try again</button>
+          <button class="text-button" @click="() => refreshPosts()">Try again</button>
         </div>
         <div v-else-if="!visiblePosts.length" class="state-card">
           No posts match these filters.
